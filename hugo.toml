@@ -31,7 +31,7 @@ enableGitInfo = true
   description = "Security Research & DLP Investigation"
 
   # Custom CSS for background image and other customizations
-  customCSS = ["css/custom.css"]
+  customCSS = ["css/custom.css", "css/main.css"]
 
   [params.author]
     name = "Dalek"
@@ -86,22 +86,46 @@ enableGitInfo = true
   weight = 0
 
 [[menu.main]]
-  identifier = "techshare"
-  name = "TechShare"
-  url = "/techshare/"
+  identifier = "research"
+  name = "Research"
+  url = "/research/"
   weight = 1
+
+[[menu.main]]
+  identifier = "investigations"
+  name = "Investigations"
+  url = "/investigations/"
+  weight = 2
 
 [[menu.main]]
   identifier = "case"
   name = "Case Studies"
   url = "/case/"
-  weight = 2
+  weight = 3
+
+[[menu.main]]
+  identifier = "tools"
+  name = "Tools"
+  url = "/tools/"
+  weight = 4
 
 [[menu.main]]
   identifier = "blog"
   name = "Blog"
   url = "/blog/"
-  weight = 3
+  weight = 5
+
+[[menu.main]]
+  identifier = "services"
+  name = "Services"
+  url = "/services/"
+  weight = 6
+
+[[menu.main]]
+  identifier = "about"
+  name = "About"
+  url = "/about/"
+  weight = 7
 
 [taxonomies]
   tag = "tags"
