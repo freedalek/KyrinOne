@@ -1,0 +1,32 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+<!-- 404 is served without a language prefix; use a tiny inline script to localize. -->
+<BaseLayout title="404" lang="en">
+  <div class="max-w-4xl mx-auto px-4 sm:px-5 py-24 text-center">
+    <div class="term-line mb-6 flex items-center justify-center gap-2">
+      <span class="text-accent">$</span>
+      <span>ls /404</span>
+    </div>
+
+    <h1 class="brand-block text-7xl md:text-8xl mb-6">
+      <span class="text-border-strong">4</span><span class="brand-highlight">0</span><span class="text-border-strong">4</span>
+    </h1>
+
+    <p class="font-mono text-sm text-muted mb-3" data-en>No such file or directory — the page you are looking for does not exist.</p>
+    <p class="font-mono text-sm text-muted mb-3 hidden" data-zh>没有这样的文件或目录——您寻找的页面不存在。</p>
+
+    <div class="flex items-center justify-center gap-4 mt-8">
+      <a href="/en/" class="nav-link" data-en>← Back to Home</a>
+      <a href="/zh/" class="nav-link hidden" data-zh>← 返回首页</a>
+      <a href="/en/search/" class="nav-link" data-en>Search</a>
+      <a href="/zh/search/" class="nav-link hidden" data-zh>搜索</a>
+    </div>
+  </div>
+</BaseLayout>
+
+<script is:inline>
+  const isZh = location.pathname.startsWith('/zh');
+  document.querySelectorAll('[data-en]').forEach((el) => el.classList.toggle('hidden', isZh));
+  document.querySelectorAll('[data-zh]').forEach((el) => el.classList.toggle('hidden', !isZh));
+</script>

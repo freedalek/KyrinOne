@@ -1,0 +1,57 @@
+---
+import ArticleLayout from '../../../layouts/ArticleLayout.astro';
+import { getCollection, render } from 'astro:content';
+import { articleLocale } from '../../../lib/content';
+
+export async function getStaticPaths() {
+  const entries = await getCollection('prompts');
+  const nonDraft = entries.filter(p => !p.data.draft);
+
+  const bySlug = new Map<string, any[]>();
+  for (const entry of nonDraft) {
+    const cleanSlug = entry.id.replace(/\.(en|zh)$/, '');
+    if (!bySlug.has(cleanSlug)) bySlug.set(cleanSlug, []);
+    bySlug.get(cleanSlug)!.push(entry);
+  }
+
+  const paths: Array<{ params: { lang: string; slug: string }; props: { entry: any; fallback: boolean } }> = [];
+  for (const [slug, entries] of bySlug) {
+    const en = entries.find((e: any) => e.data.lang === 'en');
+    const zh = entries.find((e: any) => e.data.lang === 'zh');
+    if (en) paths.push({ params: { lang: 'en', slug }, props: { entry: en, fallback: false } });
+    else if (zh) paths.push({ params: { lang: 'en', slug }, props: { entry: zh, fallback: true } });
+    if (zh) paths.push({ params: { lang: 'zh', slug }, props: { entry: zh, fallback: false } });
+    else if (en) paths.push({ params: { lang: 'zh', slug }, props: { entry: en, fallback: true } });
+  }
+  return paths;
+}
+
+const { entry, fallback } = Astro.props;
+const { Content } = await render(entry);
+const { data } = entry;
+const loc = articleLocale(entry, fallback, 'prompts');
+const readOther = loc.displayLang === 'en' ? 'Read in Chinese' : '阅读英文版';
+---
+
+<ArticleLayout
+  title={data.title}
+  description={data.description || ''}
+  pubDate={data.pubDate}
+  updatedDate={data.updatedDate}
+  tags={data.tags}
+  lang={loc.displayLang}
+  langLink={data.langLink}
+  tagBase={`/${loc.realLang}/prompts/`}
+  robots={loc.isFallback ? 'noindex, follow' : undefined}
+  canonical={loc.isFallback ? loc.realPath : undefined}
+  altLangs={loc.isFallback ? [{ hreflang: loc.realLang, href: loc.realPath }] : undefined}
+  xDefault={loc.isFallback ? loc.realPath : undefined}
+>
+  {loc.isFallback && (
+    <div slot="notice" class="mb-6 p-3 rounded-lg border border-amber/30 bg-amber/10 text-sm text-amber font-mono flex flex-wrap items-center gap-x-3 gap-y-1">
+      <span>{loc.fallbackNote}</span>
+      <a href={loc.realPath} class="underline hover:no-underline">{readOther} →</a>
+    </div>
+  )}
+  <Content slot="content" />
+</ArticleLayout>

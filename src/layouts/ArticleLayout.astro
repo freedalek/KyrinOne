@@ -1,0 +1,158 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import { useTranslations } from '../i18n';
+import TableOfContents from '../components/content/TableOfContents.astro';
+
+export interface Props {
+  title: string;
+  description: string;
+  pubDate: Date;
+  updatedDate?: Date;
+  tags?: string[];
+  lang: 'en' | 'zh';
+  langLink?: string;
+  tagBase?: string;
+  robots?: string;
+  canonical?: string;
+  altLangs?: Array<{ hreflang: string; href: string }>;
+  xDefault?: string;
+}
+
+const {
+  title,
+  description,
+  pubDate,
+  updatedDate,
+  tags = [],
+  lang,
+  langLink,
+  tagBase,
+  robots,
+  canonical,
+  altLangs,
+  xDefault,
+} = Astro.props;
+const t = useTranslations(lang);
+
+const formattedDate = pubDate.toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en-US', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+});
+
+const formattedUpdated = updatedDate?.toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en-US', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+});
+---
+
+<BaseLayout title={title} description={description} lang={lang} type="article" robots={robots} canonical={canonical} altLangs={altLangs} xDefault={xDefault}>
+  <article class="max-w-4xl mx-auto px-4 py-12">
+    <!-- Article Header -->
+    <header class="mb-10">
+      <!-- Breadcrumb -->
+      <nav class="font-mono text-xs text-muted mb-6 flex items-center gap-2">
+        <a href={`/${lang}/`} class="hover:text-accent-strong transition-colors">~</a>
+        <span class="text-border">/</span>
+        <span class="text-accent">article</span>
+      </nav>
+
+      <!-- Title -->
+      <h1 class="text-3xl md:text-4xl font-bold mb-4 leading-tight text-balance">
+        {title}
+      </h1>
+
+      <!-- Description -->
+      <p class="text-lg text-muted mb-6">{description}</p>
+
+      <!-- Meta row -->
+      <div class="flex flex-wrap items-center gap-4 font-mono text-xs text-muted">
+        <!-- Date -->
+        <div class="flex items-center gap-1.5">
+          <span class="text-accent">◆</span>
+          <time datetime={pubDate.toISOString()}>
+            {t('article.published')}: {formattedDate}
+          </time>
+        </div>
+
+        {formattedUpdated && (
+          <div class="flex items-center gap-1.5">
+            <span class="text-amber">◇</span>
+            <time datetime={updatedDate!.toISOString()}>
+              {t('article.updated')}: {formattedUpdated}
+            </time>
+          </div>
+        )}
+
+        <!-- Lang link -->
+        {langLink && (
+          <a href={langLink} class="lang-switch ml-auto">
+            {t('lang.switch')}
+          </a>
+        )}
+      </div>
+
+      <!-- Tags -->
+      {tags.length > 0 && (
+        <div class="flex flex-wrap gap-2 mt-6">
+          {tags.map((tag) => (
+            <a
+              href={`${tagBase || `/${lang}/blog/`}?tag=${encodeURIComponent(tag)}`}
+              class="tag-chip"
+            >
+              #{tag}
+            </a>
+          ))}
+        </div>
+      )}
+    </header>
+
+    <!-- Optional notice (e.g. language fallback banner) -->
+    <slot name="notice" />
+
+    <!-- Content + TOC layout -->
+    <div class="lg:grid lg:grid-cols-[1fr_250px] lg:gap-10">
+      <!-- Main content -->
+      <div class="prose prose-invert prose-lg max-w-none
+        prose-headings:text-text prose-headings:font-bold
+        prose-a:text-accent-strong prose-a:no-underline hover:prose-a:underline
+        prose-code:text-cyan prose-code:bg-surface-2 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm
+        prose-pre:bg-surface-2 prose-pre:border prose-pre:border-border prose-pre:rounded-lg
+        prose-pre:font-mono prose-pre:text-sm
+        prose-blockquote:border-l-accent prose-blockquote:text-muted prose-blockquote:italic
+        prose-img:rounded-lg prose-img:border prose-img:border-border
+        prose-hr:border-border
+        prose-strong:text-text
+        prose-li::marker:text-muted
+      ">
+        <slot name="content" />
+      </div>
+
+      <!-- Sidebar -->
+      <aside class="hidden lg:block">
+        <div class="sticky top-20">
+          <TableOfContents lang={lang} />
+        </div>
+      </aside>
+    </div>
+  </article>
+</BaseLayout>
+
+<script>
+  // Render ```mermaid fenced blocks client-side (loaded only when present).
+  const mermaidBlocks = document.querySelectorAll('pre[data-language="mermaid"]');
+  if (mermaidBlocks.length > 0) {
+    const { default: mermaid } = await import('mermaid');
+    mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'strict' });
+    mermaidBlocks.forEach((pre) => {
+      const code = pre.querySelector('code');
+      if (!code) return;
+      const div = document.createElement('div');
+      div.className = 'mermaid';
+      div.textContent = code.textContent || '';
+      pre.replaceWith(div);
+    });
+    await mermaid.run({ querySelector: '.mermaid' });
+  }
+</script>

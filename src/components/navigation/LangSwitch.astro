@@ -1,0 +1,20 @@
+---
+import { getUrlForLang } from '../../i18n';
+
+export interface Props {
+  lang: 'en' | 'zh';
+}
+
+const { lang } = Astro.props;
+const targetLang = lang === 'en' ? 'zh' : 'en';
+const targetUrl = getUrlForLang(Astro.url, targetLang);
+const label = lang === 'en' ? '中文' : 'English';
+---
+
+<a
+  href={targetUrl}
+  class="lang-switch"
+  aria-label={`Switch to ${label}`}
+>
+  <span class="text-accent">↔</span> {label}
+</a>

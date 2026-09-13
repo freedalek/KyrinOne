@@ -1,0 +1,95 @@
+---
+import { identity } from '../../data/site';
+import { useTranslations } from '../../i18n';
+import LangSwitch from './LangSwitch.astro';
+
+export interface Props {
+  lang: 'en' | 'zh';
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+
+const navItems = [
+  { key: 'home', href: `/${lang}/`, label: t('nav.home') },
+  { key: 'investigations', href: `/${lang}/investigations/`, label: t('nav.investigations') },
+  { key: 'prompts', href: `/${lang}/prompts/`, label: t('nav.prompts') },
+  { key: 'knowledge', href: `/${lang}/knowledge/`, label: t('nav.knowledge') },
+] as const;
+
+const knowledgePrefixes = ['blog', 'notes', 'research', 'writeups', 'projects', 'stream'].map(
+  (c) => `/${lang}/${c}/`
+);
+
+function isActive(pathname: string, item: (typeof navItems)[number]): boolean {
+  if (item.key === 'home') return pathname === item.href;
+  if (item.key === 'knowledge') {
+    return pathname.startsWith(item.href) || knowledgePrefixes.some((p) => pathname.startsWith(p));
+  }
+  return pathname.startsWith(item.href);
+}
+---
+
+<nav class="site-nav" aria-label="Main navigation">
+  <div class="flex items-center gap-3 h-12 px-3 sm:px-5 max-w-6xl mx-auto">
+    <!-- Brand -->
+    <a
+      href={`/${lang}/`}
+      class="brand-block text-[0.95rem] text-text shrink-0 flex items-baseline gap-0.5"
+      aria-label="kyrin.one — home"
+    >
+      <span class="text-text">kyr</span>
+      <span class="brand-highlight">in</span>
+      <span class="text-faint">.one</span>
+    </a>
+
+    <span class="hidden md:inline-block w-px h-4 bg-border mx-1" aria-hidden="true"></span>
+    <span class="hidden lg:inline-block font-mono text-[0.7rem] text-faint truncate max-w-[220px]">
+      {lang === 'en' ? identity.sloganEn : identity.sloganZh}
+    </span>
+
+    <!-- Module buttons (right) -->
+    <div class="ml-auto flex items-center gap-0.5 sm:gap-1 overflow-x-auto no-scrollbar">
+      {navItems.map((item) => {
+        const active = isActive(Astro.url.pathname, item);
+        return (
+          <a
+            href={item.href}
+            class={`nav-link ${active ? 'active' : ''}`}
+            aria-current={active ? 'page' : undefined}
+          >
+            {item.label}
+          </a>
+        );
+      })}
+
+      <a
+        href={`/${lang}/search/`}
+        class={`nav-link ${Astro.url.pathname.includes('/search/') ? 'active' : ''}`}
+        aria-label={t('nav.search')}
+        title={t('nav.search')}
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <span class="hidden sm:inline">{t('nav.search')}</span>
+      </a>
+
+      <span class="w-px h-4 bg-border mx-0.5" aria-hidden="true"></span>
+
+      <LangSwitch lang={lang} />
+    </div>
+  </div>
+</nav>
+
+<style>
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+</style>

@@ -1,0 +1,495 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { useTranslations } from "../../i18n";
+import { identity, coreServices, roadmap, contacts } from "../../data/site";
+import { getDisplayEntries, entryUrl } from "../../lib/content";
+
+export async function getStaticPaths() {
+  return [{ params: { lang: "en" } }, { params: { lang: "zh" } }];
+}
+
+const { lang } = Astro.params as { lang: "en" | "zh" };
+const t = useTranslations(lang);
+
+const role = identity.role[lang];
+const subline = identity.subline[lang];
+const qrContact = contacts.find((c) => c.qr);
+const slogan = lang === "en" ? identity.sloganEn : identity.sloganZh;
+const sloganHighlights =
+  lang === "en" ? identity.sloganEnHighlight : identity.sloganZhHighlight;
+const otherSlogan = lang === "en" ? identity.sloganZh : identity.sloganEn;
+
+// Split slogan into highlight / normal segments for rendering.
+function highlightSegments(
+  text: string,
+  highlights: string[],
+): Array<{ text: string; hl: boolean }> {
+  const segments: Array<{ text: string; hl: boolean }> = [];
+  let rest = text;
+  for (const h of highlights) {
+    const idx = rest.indexOf(h);
+    if (idx === -1) continue;
+    if (idx > 0) segments.push({ text: rest.slice(0, idx), hl: false });
+    segments.push({ text: h, hl: true });
+    rest = rest.slice(idx + h.length);
+  }
+  if (rest) segments.push({ text: rest, hl: false });
+  return segments;
+}
+const sloganParts = highlightSegments(slogan, sloganHighlights);
+
+// ---- Layer 3 data: latest updates + recommended (featured) ----
+const homeCollections = [
+  "blog",
+  "notes",
+  "writeups",
+  "research",
+  "projects",
+  "stream",
+  "investigations",
+  "prompts",
+] as const;
+
+const latest: Array<{
+  title: string;
+  desc: string;
+  url: string;
+  date: Date;
+  type: string;
+}> = [];
+const featured: Array<{
+  title: string;
+  desc: string;
+  url: string;
+  date: Date;
+  type: string;
+}> = [];
+
+for (const name of homeCollections) {
+  const items = await getDisplayEntries(lang, name);
+  for (const it of items) {
+    // Keep the homepage in the current language only; other-language content is
+    // reachable via the listing pages' "include other languages" toggle.
+    if (it.isFallback) continue;
+    const item = {
+      title:
+        it.entry.data.title ||
+        (name === "stream" ? (lang === "en" ? "Stream" : "动态") : ""),
+      desc: it.entry.data.description || "",
+      url: entryUrl(lang, name, it.entry.id),
+      date: it.entry.data.pubDate as Date,
+      type: name,
+    };
+    latest.push(item);
+    if (it.entry.data.featured) featured.push(item);
+  }
+}
+
+const sortDesc = (a: { date: Date }, b: { date: Date }) =>
+  b.date.getTime() - a.date.getTime();
+latest.sort(sortDesc);
+featured.sort(sortDesc);
+
+const latestList = latest.slice(0, 6);
+const featuredList = featured.slice(0, 5);
+
+const typeLabels: Record<string, string> = {
+  blog: t("type.essay"),
+  notes: t("type.note"),
+  writeups: t("type.writeup"),
+  research: t("type.research"),
+  projects: t("type.project"),
+  stream: t("type.stream"),
+  investigations: t("type.investigation"),
+  prompts: t("type.prompt"),
+};
+
+function fmtDate(d: Date): string {
+  return d.toLocaleDateString(lang === "zh" ? "zh-CN" : "en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+---
+
+<BaseLayout title={lang === "en" ? "kyrin.one" : "kyrin.one"} lang={lang}>
+  <!-- ============ LAYER 1 — Identity ============ -->
+  <section class="max-w-6xl mx-auto px-4 sm:px-5 pt-16 md:pt-24 pb-16">
+    <div class="term-line mb-8 flex items-center gap-2">
+      <span class="term-prompt">$</span>
+      <span>cat /identity.md</span>
+    </div>
+
+    <div class="grid md:grid-cols-[1.3fr_1fr] gap-10 md:gap-16 items-start">
+      <!-- Brand + slogan -->
+      <div>
+        <h1 class="brand-block text-[3.4rem] leading-none md:text-7xl">
+          kyr<span class="brand-highlight">in</span><span class="text-faint"
+            >.one</span
+          >
+        </h1>
+
+        <p
+          class="mt-6 font-display text-xl md:text-2xl leading-snug text-text text-balance"
+        >
+          {
+            sloganParts.map((seg) =>
+              seg.hl ? (
+                <span class="slogan-highlight">{seg.text}</span>
+              ) : (
+                <span>{seg.text}</span>
+              ),
+            )
+          }
+        </p>
+        <p class="mt-2 font-mono text-xs text-faint">{otherSlogan}</p>
+
+        <div class="mt-8 flex flex-wrap items-center gap-3">
+          <span class="tag-chip inert !text-accent-strong">
+            <span class="w-1.5 h-1.5 rounded-full bg-accent animate-pulse"
+            ></span>
+            {role}
+          </span>
+          <a href={`/${lang}/search/`} class="nav-link !text-muted">
+            {t("nav.search")} →
+          </a>
+        </div>
+      </div>
+
+      <!-- What I do, in one paragraph -->
+      <div class="md:pt-3">
+        <div class="border-l-2 border-accent/40 pl-5">
+          <p class="text-muted leading-relaxed text-[1.02rem]">{subline}</p>
+        </div>
+
+        <div class="mt-8 space-y-2 font-mono text-[0.7rem] text-faint">
+          <div class="grid grid-cols-[1rem_1fr] items-center gap-x-2">
+            <span class="text-center text-accent">●</span>
+            <span
+              >{
+                lang === "en"
+                  ? "core: digital investigation · threat analysis · forensics"
+                  : "核心：数字调查 · 威胁分析 · 取证"
+              }</span
+            >
+          </div>
+          <div class="grid grid-cols-[1rem_1fr] items-center gap-x-2">
+            <span class="text-center text-amber">◔</span>
+            <span
+              >{
+                lang === "en"
+                  ? "research: reverse · web3 · AI"
+                  : "研究：逆向 · 区块链 · AI"
+              }</span
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LAYER 2 — What I Do ============ -->
+  <section class="max-w-6xl mx-auto px-4 sm:px-5 py-10">
+    <div class="section-heading">
+      <span class="marker">◈</span>
+      {t("services.title")}
+    </div>
+    <p class="mt-1 mb-6 font-mono text-xs text-faint">
+      {t("services.tagline")}
+    </p>
+
+    <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {
+        coreServices.map((s) => (
+          <div class="card p-5 flex flex-col">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-accent text-lg leading-none">{s.icon}</span>
+              <span class="tag-chip inert !text-[0.65rem]">
+                {t("services.available")}
+              </span>
+            </div>
+            <h3 class="font-semibold text-[0.95rem] mb-1.5">{s.title[lang]}</h3>
+            <p class="text-sm text-muted leading-relaxed flex-1">
+              {s.desc[lang]}
+            </p>
+          </div>
+        ))
+      }
+    </div>
+
+    <!-- Roadmap (learning / future service lines) -->
+    <div class="mt-10">
+      <div class="section-heading">
+        <span class="marker">◔</span>
+        {t("roadmap.title")}
+      </div>
+      <p class="mt-1 mb-6 font-mono text-xs text-faint">
+        {t("roadmap.tagline")}
+      </p>
+
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {
+          roadmap.map((r) => (
+            <div class="border border-border rounded-lg p-4 bg-surface/60">
+              <div class="flex items-center justify-between mb-2.5">
+                <span class="text-faint text-base leading-none">{r.icon}</span>
+                <span class="font-mono text-[0.6rem] text-amber/90 uppercase tracking-widest">
+                  {t("roadmap.inprogress")}
+                </span>
+              </div>
+              <h4 class="text-sm font-semibold mb-1">{r.title[lang]}</h4>
+              <p class="text-xs text-muted leading-relaxed">{r.desc[lang]}</p>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LAYER 3 — Two lists ============ -->
+  <section class="max-w-6xl mx-auto px-4 sm:px-5 py-10">
+    <div class="grid lg:grid-cols-2 gap-10">
+      <!-- Recent updates -->
+      <div>
+        <div class="flex items-center justify-between mb-6">
+          <div class="section-heading">
+            <span class="marker">◈</span>
+            {t("latest.title")}
+          </div>
+          <a
+            href={`/${lang}/knowledge/`}
+            class="font-mono text-xs text-muted hover:text-accent transition-colors"
+          >
+            {t("latest.viewAll")} →
+          </a>
+        </div>
+
+        <div class="space-y-3">
+          {
+            latestList.length > 0 ? (
+              latestList.map((item) => (
+                <a href={item.url} class="article-card">
+                  <div class="flex items-center justify-between gap-3 mb-1">
+                    <span class="font-mono text-[0.62rem] text-faint uppercase tracking-wider">
+                      {typeLabels[item.type]}
+                    </span>
+                    <time class="font-mono text-[0.62rem] text-faint shrink-0">
+                      {fmtDate(item.date)}
+                    </time>
+                  </div>
+                  <h3 class="font-semibold text-sm leading-snug group-hover:text-accent">
+                    {item.title}
+                  </h3>
+                  {item.desc && (
+                    <p class="text-xs text-muted line-clamp-2 mt-1.5 leading-relaxed">
+                      {item.desc}
+                    </p>
+                  )}
+                </a>
+              ))
+            ) : (
+              <p class="text-sm text-faint font-mono italic">
+                {lang === "en" ? "Nothing published yet." : "暂无内容。"}
+              </p>
+            )
+          }
+        </div>
+      </div>
+
+      <!-- Recommended -->
+      <div>
+        <div class="flex items-center justify-between mb-6">
+          <div class="section-heading">
+            <span class="marker">◆</span>
+            {t("featured.title")}
+          </div>
+          <a
+            href={`/${lang}/knowledge/`}
+            class="font-mono text-xs text-muted hover:text-accent transition-colors"
+          >
+            {t("featured.viewAll")} →
+          </a>
+        </div>
+
+        <div class="space-y-3">
+          {
+            featuredList.length > 0 ? (
+              featuredList.map((item) => (
+                <a href={item.url} class="article-card">
+                  <div class="flex items-center justify-between gap-3 mb-1">
+                    <span class="font-mono text-[0.62rem] text-accent uppercase tracking-wider">
+                      ★ {typeLabels[item.type]}
+                    </span>
+                    <time class="font-mono text-[0.62rem] text-faint shrink-0">
+                      {fmtDate(item.date)}
+                    </time>
+                  </div>
+                  <h3 class="font-semibold text-sm leading-snug">
+                    {item.title}
+                  </h3>
+                  {item.desc && (
+                    <p class="text-xs text-muted line-clamp-2 mt-1.5 leading-relaxed">
+                      {item.desc}
+                    </p>
+                  )}
+                </a>
+              ))
+            ) : (
+              <p class="text-sm text-faint font-mono italic">
+                {lang === "en" ? "Nothing recommended yet." : "暂无推荐。"}
+              </p>
+            )
+          }
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LAYER 4 — Contact ============ -->
+  <section class="max-w-6xl mx-auto px-4 sm:px-5 py-12 pb-20">
+    <div class="section-heading">
+      <span class="marker">✉</span>
+      {t("contact.title")}
+    </div>
+    <p class="mt-1 mb-6 font-mono text-xs text-faint">{t("contact.tagline")}</p>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 max-w-4xl">
+      {
+        contacts.map((c) =>
+          c.href ? (
+            <a
+              href={c.href}
+              class="card p-4 flex items-center gap-3 group"
+              {...(c.href.startsWith("http")
+                ? { target: "_blank", rel: "noopener noreferrer" }
+                : {})}
+            >
+              <span class="text-accent text-sm group-hover:translate-x-0.5 transition-transform">
+                →
+              </span>
+              <div class="min-w-0">
+                <div class="font-mono text-[0.6rem] text-faint uppercase tracking-widest">
+                  {t(c.labelKey as any)}
+                </div>
+                <div class="text-sm font-mono text-text truncate">
+                  {c.value}
+                </div>
+              </div>
+            </a>
+          ) : (
+            <div class="card p-4 flex items-center gap-3">
+              <span class="text-faint text-sm">→</span>
+              <div class="min-w-0 flex-1">
+                <div class="font-mono text-[0.6rem] text-faint uppercase tracking-widest">
+                  {t(c.labelKey as any)}
+                </div>
+                <div class="text-sm font-mono text-text truncate">
+                  {c.value}
+                </div>
+              </div>
+              {c.copy && (
+                <button
+                  type="button"
+                  class="shrink-0 font-mono text-[0.65rem] text-muted hover:text-accent border border-border rounded px-1.5 py-0.5 transition-colors"
+                  data-copy={c.value}
+                  data-copied={t("contact.copied")}
+                  aria-label={t("contact.copy")}
+                  title={t("contact.copy")}
+                >
+                  {t("contact.copy")}
+                </button>
+              )}
+              {c.qr && (
+                <button
+                  type="button"
+                  id="qr-open"
+                  class="shrink-0 font-mono text-[0.65rem] text-muted hover:text-accent border border-border rounded px-1.5 py-0.5 transition-colors"
+                  aria-label={t("contact.qr")}
+                  title={t("contact.qr")}
+                >
+                  {t("contact.qr")}
+                </button>
+              )}
+            </div>
+          ),
+        )
+      }
+    </div>
+
+    {
+      qrContact && (
+        <div
+          id="qr-overlay"
+          class="fixed inset-0 z-50 hidden items-center justify-center bg-black/80 p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div class="bg-surface border border-border rounded-xl p-4 text-center max-w-xs">
+            <img
+              src={qrContact.qr}
+              alt="WeChat QR code"
+              class="w-64 max-w-full h-auto rounded-lg"
+              loading="lazy"
+            />
+            <p class="mt-3 font-mono text-xs text-muted">
+              {t("contact.wechat")}: {qrContact.value}
+            </p>
+            <p class="mt-1 font-mono text-[0.65rem] text-faint">
+              {lang === "en" ? "Tap anywhere to close" : "点击任意处关闭"}
+            </p>
+          </div>
+        </div>
+      )
+    }
+  </section>
+</BaseLayout>
+
+<script is:inline>
+  // Copy-to-clipboard for contact values (e.g. WeChat ID).
+  document.querySelectorAll("[data-copy]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const text = btn.getAttribute("data-copy") || "";
+      let ok = false;
+      try {
+        await navigator.clipboard.writeText(text);
+        ok = true;
+      } catch (e) {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          ok = document.execCommand("copy");
+        } catch (_) {}
+        document.body.removeChild(ta);
+      }
+      const prev = btn.textContent;
+      btn.textContent = ok ? btn.dataset.copied || "✓" : "✕";
+      setTimeout(() => {
+        btn.textContent = prev;
+      }, 1200);
+    });
+  });
+
+  // WeChat QR lightbox.
+  const qrOpen = document.getElementById("qr-open");
+  const qrOverlay = document.getElementById("qr-overlay");
+  if (qrOpen && qrOverlay) {
+    const openQr = () => {
+      qrOverlay.classList.remove("hidden");
+      qrOverlay.classList.add("flex");
+    };
+    const closeQr = () => {
+      qrOverlay.classList.add("hidden");
+      qrOverlay.classList.remove("flex");
+    };
+    qrOpen.addEventListener("click", openQr);
+    qrOverlay.addEventListener("click", closeQr);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeQr();
+    });
+  }
+</script>

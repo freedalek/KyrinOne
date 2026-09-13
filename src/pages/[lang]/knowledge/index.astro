@@ -1,0 +1,340 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { useTranslations } from '../../../i18n';
+import { getDisplayEntries, entryUrl, type CollectionName } from '../../../lib/content';
+
+export async function getStaticPaths() {
+  return [
+    { params: { lang: 'en' } },
+    { params: { lang: 'zh' } },
+  ];
+}
+
+const { lang } = Astro.params as { lang: 'en' | 'zh' };
+const t = useTranslations(lang);
+
+const KNOWLEDGE_COLLECTIONS: CollectionName[] = [
+  'blog',
+  'notes',
+  'research',
+  'writeups',
+  'projects',
+  'stream',
+];
+
+const typeKey: Record<string, string> = {
+  blog: 'type.essay',
+  notes: 'type.note',
+  research: 'type.research',
+  writeups: 'type.writeup',
+  projects: 'type.project',
+  stream: 'type.stream',
+};
+
+function excerpt(body: string | undefined, len = 220): string {
+  if (!body) return '';
+  return String(body)
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/[#>*`_~[\]()]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, len);
+}
+
+interface KbItem {
+  type: CollectionName;
+  title: string;
+  desc: string;
+  url: string;
+  date: string;
+  tags: string[];
+  hasEn: boolean;
+  hasZh: boolean;
+  isFallback: boolean;
+  realLang: 'en' | 'zh';
+}
+
+const items: KbItem[] = [];
+
+for (const name of KNOWLEDGE_COLLECTIONS) {
+  const display = await getDisplayEntries(lang, name);
+  for (const it of display) {
+    const { entry, versions } = it;
+    const body = (entry as any).body as string | undefined;
+    const d = entry.data;
+    const realLang = d.lang as 'en' | 'zh';
+    items.push({
+      type: name,
+      title: d.title || t('type.stream'),
+      desc: d.description || excerpt(body),
+      // Fallback entries link to their real-language page (never to a noindex page).
+      url: it.isFallback ? `/${realLang}/${name}/${it.slug}/` : entryUrl(lang, name, entry.id),
+      date: (d.pubDate as Date).toISOString(),
+      tags: d.tags || [],
+      hasEn: versions.some((e: any) => e.data.lang === 'en'),
+      hasZh: versions.some((e: any) => e.data.lang === 'zh'),
+      isFallback: it.isFallback,
+      realLang,
+    });
+  }
+}
+
+items.sort((a, b) => b.date.localeCompare(a.date));
+
+// Tags sorted by frequency (most-used first) so the collapsed view shows the useful ones.
+const tagCounts = new Map<string, number>();
+for (const i of items) {
+  if (i.isFallback) continue;
+  for (const tg of i.tags) tagCounts.set(tg, (tagCounts.get(tg) || 0) + 1);
+}
+const allTags = [...tagCounts.keys()].sort(
+  (a, b) => tagCounts.get(b)! - tagCounts.get(a)! || a.localeCompare(b, 'zh-Hans-CN')
+);
+const hasFallback = items.some((i) => i.isFallback);
+const TAG_LIMIT = 12;
+const PAGE_SIZE = 20;
+const typeChips: Array<{ value: string; label: string }> = [
+  { value: '', label: lang === 'en' ? 'all' : '全部' },
+  ...KNOWLEDGE_COLLECTIONS.map((c) => ({ value: c, label: t(typeKey[c] as any) })),
+];
+
+function fmt(d: string): string {
+  return new Date(d).toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+---
+
+<BaseLayout title={t('nav.knowledge')} lang={lang}>
+  <div class="max-w-4xl mx-auto px-4 sm:px-5 py-12">
+    <header class="mb-10">
+      <nav class="term-line mb-4 flex items-center gap-2">
+        <a href={`/${lang}/`} class="hover:text-accent transition-colors">~</a>
+        <span class="text-border">/</span>
+        <span class="text-accent">{t('nav.knowledge')}</span>
+      </nav>
+
+      <h1 class="text-3xl md:text-4xl font-bold font-display mb-4">{t('knowledge.title')}</h1>
+      <p class="text-muted">{t('knowledge.desc')}</p>
+    </header>
+
+    <div class="mb-8 font-mono text-sm">
+      <div class="flex items-center gap-2 text-muted mb-3">
+        <span class="text-accent">$</span>
+        <span>ls kinds/</span>
+      </div>
+      <div class="flex flex-wrap gap-2 pl-5" id="kind-filter">
+        {typeChips.map((c) => (
+          <button type="button" data-kind={c.value} class="tag-chip">
+            {c.label}
+          </button>
+        ))}
+      </div>
+
+      {allTags.length > 0 && (
+        <>
+          <div class="flex items-center gap-2 text-muted my-3">
+            <span class="text-accent">$</span>
+            <span>ls tags/</span>
+          </div>
+          <div class="flex flex-wrap gap-2 pl-5" id="tag-filter">
+            <button type="button" data-tag="" class="tag-chip">
+              {lang === 'en' ? 'all' : '全部'}
+            </button>
+            {allTags.map((tag, i) => (
+              <button type="button" data-tag={tag} class={`tag-chip${i >= TAG_LIMIT ? ' tag-overflow hidden' : ''}`}>#{tag}</button>
+            ))}
+            {allTags.length > TAG_LIMIT && (
+              <button
+                type="button"
+                id="tag-more"
+                class="tag-chip"
+                data-more={lang === 'en' ? `+${allTags.length - TAG_LIMIT} more` : `+${allTags.length - TAG_LIMIT} 个`}
+                data-less={lang === 'en' ? 'show less' : '收起'}
+              >
+                {lang === 'en' ? `+${allTags.length - TAG_LIMIT} more` : `+${allTags.length - TAG_LIMIT} 个`}
+              </button>
+            )}
+          </div>
+        </>
+      )}
+
+      {hasFallback && (
+        <label class="mt-4 flex items-center gap-2 font-mono text-xs text-muted cursor-pointer select-none w-fit">
+          <input type="checkbox" id="kb-include-other" class="h-3.5 w-3.5 accent-emerald-400" />
+          <span>{t('filter.includeOther')}</span>
+        </label>
+      )}
+    </div>
+
+    <div class="space-y-4" id="kb-list">
+      {items.length > 0 ? (
+        items.map((item) => (
+          <article class="article-card group" data-item data-type={item.type}
+            data-fallback={item.isFallback ? 'true' : 'false'}
+            data-tags={JSON.stringify(item.tags)}>
+            <a href={item.url} class="block no-underline">
+              <div class="flex items-center justify-between gap-3 mb-1.5">
+                <span class="font-mono text-[0.65rem] text-faint uppercase tracking-wider">
+                  {t(typeKey[item.type] as any)}
+                </span>
+                <div class="flex items-center gap-2">
+                  {item.isFallback && (
+                    <span class="font-mono text-[0.6rem] text-amber">
+                      {item.realLang === 'en' ? t('badge.enOnly') : t('badge.zhOnly')}
+                    </span>
+                  )}
+                  <span class="font-mono text-[0.6rem] text-muted">
+                    <span class={item.hasEn ? 'text-accent' : 'text-border'}>EN</span>
+                    <span class="mx-0.5 text-border">/</span>
+                    <span class={item.hasZh ? 'text-accent' : 'text-border'}>ZH</span>
+                  </span>
+                  <time class="font-mono text-[0.65rem] text-faint">{fmt(item.date)}</time>
+                </div>
+              </div>
+              <h2 class="text-lg font-semibold mb-2 group-hover:text-accent transition-colors">
+                {item.title}
+              </h2>
+              {item.desc && (
+                <p class="text-sm text-muted line-clamp-2 leading-relaxed mb-3">{item.desc}</p>
+              )}
+              {item.tags.length > 0 && (
+                <div class="flex flex-wrap gap-1.5">
+                  {item.tags.slice(0, 4).map((tag) => (
+                    <span class="tag-chip text-[10px]">#{tag}</span>
+                  ))}
+                </div>
+              )}
+            </a>
+          </article>
+        ))
+      ) : (
+        <p class="text-sm text-faint font-mono italic">{t('knowledge.empty')}</p>
+      )}
+    </div>
+
+    <div class="hidden text-center py-6 font-mono text-sm" id="kb-more">
+      <button type="button" class="tag-chip" id="kb-more-btn">
+        {lang === 'en' ? 'Load more' : '加载更多'} · <span id="kb-more-count">0</span>
+      </button>
+    </div>
+
+    <div class="hidden text-center py-12 font-mono text-sm text-muted" id="kb-empty">
+      <p class="mb-2">{lang === 'en' ? 'Nothing matches these filters' : '没有符合筛选的内容'}</p>
+      <button type="button" class="text-accent hover:underline" id="kb-clear">
+        {lang === 'en' ? 'Clear filters' : '清除筛选'}
+      </button>
+    </div>
+  </div>
+</BaseLayout>
+
+<script is:inline>
+  const PAGE_SIZE = 20;
+  const items = Array.from(document.querySelectorAll('[data-item]'));
+  const kindBtns = Array.from(document.querySelectorAll('#kind-filter button[data-kind]'));
+  const tagBtns = Array.from(document.querySelectorAll('#tag-filter button[data-tag]'));
+  const emptyEl = document.getElementById('kb-empty');
+  const clearEl = document.getElementById('kb-clear');
+  const includeOtherEl = document.getElementById('kb-include-other');
+  const moreWrap = document.getElementById('kb-more');
+  const moreBtn = document.getElementById('kb-more-btn');
+  const moreCount = document.getElementById('kb-more-count');
+  const tagMore = document.getElementById('tag-more');
+  const overflowTags = Array.from(document.querySelectorAll('#tag-filter .tag-overflow'));
+  const base = window.location.pathname;
+
+  const params = new URLSearchParams(window.location.search);
+  const hasCurrent = items.some((el) => el.dataset.fallback !== 'true');
+  let activeKind = params.get('type') || '';
+  let activeTag = params.get('tag') || '';
+  let includeOther = params.get('all') === '1' || (!hasCurrent && params.get('all') !== '0');
+  let visibleLimit = PAGE_SIZE;
+  let tagsExpanded = false;
+  if (includeOtherEl) includeOtherEl.checked = includeOther;
+
+  function syncUrl() {
+    const q = new URLSearchParams();
+    if (activeKind) q.set('type', activeKind);
+    if (activeTag) q.set('tag', activeTag);
+    if (includeOther) q.set('all', '1');
+    const qs = q.toString();
+    history.replaceState(null, '', qs ? `${base}?${qs}` : base);
+  }
+
+  function tagList(el) {
+    try {
+      return JSON.parse(el.dataset.tags || '[]');
+    } catch {
+      return [];
+    }
+  }
+
+  function matches(el) {
+    if (activeKind && el.dataset.type !== activeKind) return false;
+    if (activeTag && !tagList(el).includes(activeTag)) return false;
+    if (!includeOther && el.dataset.fallback === 'true') return false;
+    return true;
+  }
+
+  function apply() {
+    const matched = items.filter(matches);
+    const shown = new Set(matched.slice(0, visibleLimit));
+    items.forEach((el) => el.classList.toggle('hidden', !shown.has(el)));
+    const remaining = matched.length - shown.size;
+    if (moreWrap) moreWrap.classList.toggle('hidden', remaining <= 0);
+    if (moreCount) moreCount.textContent = String(remaining);
+    if (emptyEl) emptyEl.classList.toggle('hidden', matched.length !== 0);
+    kindBtns.forEach((b) => b.classList.toggle('active', (b.dataset.kind || '') === activeKind));
+    tagBtns.forEach((b) => b.classList.toggle('active', (b.dataset.tag || '') === activeTag));
+    syncUrl();
+  }
+
+  function resetAndApply() {
+    visibleLimit = PAGE_SIZE;
+    apply();
+  }
+
+  function setTagsExpanded(v) {
+    tagsExpanded = v;
+    overflowTags.forEach((t) => t.classList.toggle('hidden', !v));
+    if (tagMore) tagMore.textContent = v ? tagMore.dataset.less : tagMore.dataset.more;
+  }
+
+  kindBtns.forEach((b) =>
+    b.addEventListener('click', () => {
+      activeKind = b.dataset.kind || '';
+      resetAndApply();
+    })
+  );
+  tagBtns.forEach((b) =>
+    b.addEventListener('click', () => {
+      activeTag = b.dataset.tag || '';
+      resetAndApply();
+    })
+  );
+  includeOtherEl &&
+    includeOtherEl.addEventListener('change', () => {
+      includeOther = includeOtherEl.checked;
+      resetAndApply();
+    });
+  clearEl &&
+    clearEl.addEventListener('click', () => {
+      activeKind = '';
+      activeTag = '';
+      resetAndApply();
+    });
+  moreBtn &&
+    moreBtn.addEventListener('click', () => {
+      visibleLimit += PAGE_SIZE;
+      apply();
+    });
+  tagMore && tagMore.addEventListener('click', () => setTagsExpanded(!tagsExpanded));
+
+  // If the active tag is collapsed, expand the tag list so it is visible.
+  if (activeTag && overflowTags.some((t) => t.dataset.tag === activeTag)) setTagsExpanded(true);
+
+  apply();
+</script>

@@ -1,0 +1,53 @@
+---
+import { useTranslations } from '../../i18n';
+
+export interface Props {
+  lang: 'en' | 'zh';
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+---
+
+<div class="font-mono text-sm">
+  <div class="flex items-center gap-2 mb-4 text-accent text-xs uppercase tracking-wider">
+    <span>◈</span>
+    <span>{t('article.toc')}</span>
+  </div>
+  
+  <div class="toc-root space-y-1.5 text-muted">
+    <!-- TOC will be populated client-side -->
+    <p class="text-xs italic">Loading...</p>
+  </div>
+</div>
+
+<script>
+  // Client-side TOC generation (DOM-safe: never injects heading text as HTML).
+  document.addEventListener('DOMContentLoaded', () => {
+    const tocRoot = document.querySelector('.toc-root');
+    if (!tocRoot) return;
+
+    const headings = document.querySelectorAll('article h2, article h3');
+    if (headings.length === 0) {
+      tocRoot.innerHTML = '<p class="text-xs italic text-border">No sections</p>';
+      return;
+    }
+
+    const frag = document.createDocumentFragment();
+    headings.forEach((h, i) => {
+      const text = h.textContent || '';
+      const id =
+        text.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || `section-${i}`;
+      h.id = id;
+
+      const a = document.createElement('a');
+      a.href = `#${id}`;
+      a.className = `block ${h.tagName === 'H3' ? 'ml-4' : ''} py-0.5 hover:text-accent-strong transition-colors text-xs`;
+      a.textContent = text;
+      frag.appendChild(a);
+    });
+
+    tocRoot.textContent = '';
+    tocRoot.appendChild(frag);
+  });
+</script>

@@ -1,0 +1,274 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { useTranslations } from '../../../i18n';
+import { getDisplayEntries, entryUrl } from '../../../lib/content';
+
+export async function getStaticPaths() {
+  return [
+    { params: { lang: 'en' } },
+    { params: { lang: 'zh' } },
+  ];
+}
+
+const { lang } = Astro.params as { lang: 'en' | 'zh' };
+const t = useTranslations(lang);
+
+interface InvItem {
+  title: string;
+  desc: string;
+  url: string;
+  date: string;
+  tags: string[];
+  kind: string;
+  isFallback: boolean;
+  realLang: 'en' | 'zh';
+}
+
+const display = await getDisplayEntries(lang, 'investigations');
+
+const items: InvItem[] = display.map((it) => {
+  const d = it.entry.data;
+  const realLang = d.lang as 'en' | 'zh';
+  return {
+    title: d.title,
+    desc: d.description || '',
+    url: it.isFallback ? `/${realLang}/investigations/${it.slug}/` : entryUrl(lang, 'investigations', it.entry.id),
+    date: (d.pubDate as Date).toISOString(),
+    tags: d.tags || [],
+    kind: d.kind || '',
+    isFallback: it.isFallback,
+    realLang,
+  };
+});
+
+items.sort((a, b) => b.date.localeCompare(a.date));
+
+const tagCounts = new Map<string, number>();
+for (const i of items) {
+  if (i.isFallback) continue;
+  for (const tg of i.tags) tagCounts.set(tg, (tagCounts.get(tg) || 0) + 1);
+}
+const allTags = [...tagCounts.keys()].sort(
+  (a, b) => tagCounts.get(b)! - tagCounts.get(a)! || a.localeCompare(b, 'zh-Hans-CN')
+);
+const hasFallback = items.some((i) => i.isFallback);
+const TAG_LIMIT = 12;
+const PAGE_SIZE = 20;
+
+function fmt(d: string): string {
+  return new Date(d).toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+---
+
+<BaseLayout title={t('nav.investigations')} lang={lang}>
+  <div class="max-w-4xl mx-auto px-4 sm:px-5 py-12">
+    <header class="mb-10">
+      <nav class="term-line mb-4 flex items-center gap-2">
+        <a href={`/${lang}/`} class="hover:text-accent transition-colors">~</a>
+        <span class="text-border">/</span>
+        <span class="text-accent">{t('nav.investigations')}</span>
+      </nav>
+
+      <h1 class="text-3xl md:text-4xl font-bold font-display mb-4">{t('investigations.title')}</h1>
+      <p class="text-muted">{t('investigations.desc')}</p>
+    </header>
+
+    {items.length === 0 ? (
+      <div class="border border-border rounded-xl p-10 mt-4 text-center">
+        <div class="font-mono text-sm mb-4 text-faint flex items-center justify-center gap-2">
+          <span class="text-accent">$</span>
+          <span>ls investigations/</span>
+        </div>
+        <div class="w-12 h-12 mx-auto mb-4 rounded-lg border border-dashed border-border-strong flex items-center justify-center text-xl text-faint">
+          ∅
+        </div>
+        <p class="font-mono text-sm text-muted">{t('investigations.empty')}</p>
+        <p class="font-mono text-xs text-faint mt-2">
+          {lang === 'en' ? 'Case files appear here as the lab publishes them.' : '案例报告发布后将显示在此处。'}
+        </p>
+      </div>
+    ) : (
+      <>
+        <div class="mb-8 font-mono text-sm">
+          <div class="flex items-center gap-2 text-muted mb-3">
+            <span class="text-accent">$</span>
+            <span>ls tags/</span>
+          </div>
+          <div class="flex flex-wrap gap-2 pl-5" id="tag-filter">
+            <button type="button" data-tag="" class="tag-chip">
+              {lang === 'en' ? 'all' : '全部'}
+            </button>
+            {allTags.map((tag, i) => (
+              <button type="button" data-tag={tag} class={`tag-chip${i >= TAG_LIMIT ? ' tag-overflow hidden' : ''}`}>#{tag}</button>
+            ))}
+            {allTags.length > TAG_LIMIT && (
+              <button
+                type="button"
+                id="tag-more"
+                class="tag-chip"
+                data-more={lang === 'en' ? `+${allTags.length - TAG_LIMIT} more` : `+${allTags.length - TAG_LIMIT} 个`}
+                data-less={lang === 'en' ? 'show less' : '收起'}
+              >
+                {lang === 'en' ? `+${allTags.length - TAG_LIMIT} more` : `+${allTags.length - TAG_LIMIT} 个`}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {hasFallback && (
+          <label class="mb-8 flex items-center gap-2 font-mono text-xs text-muted cursor-pointer select-none w-fit">
+            <input type="checkbox" id="inv-include-other" class="h-3.5 w-3.5 accent-emerald-400" />
+            <span>{t('filter.includeOther')}</span>
+          </label>
+        )}
+
+        <div class="space-y-4" id="inv-list">
+          {items.map((item) => (
+            <article class="article-card group" data-item data-fallback={item.isFallback ? 'true' : 'false'} data-tags={JSON.stringify(item.tags)}>
+              <a href={item.url} class="block no-underline">
+                <div class="flex items-center justify-between gap-3 mb-1.5">
+                  <span class="font-mono text-[0.65rem] text-faint uppercase tracking-wider">
+                    {item.kind === 'case' ? t('type.case') : t('type.investigation')}
+                  </span>
+                  <div class="flex items-center gap-2">
+                    {item.isFallback && (
+                      <span class="font-mono text-[0.6rem] text-amber">
+                        {item.realLang === 'en' ? t('badge.enOnly') : t('badge.zhOnly')}
+                      </span>
+                    )}
+                    <time class="font-mono text-[0.65rem] text-faint">{fmt(item.date)}</time>
+                  </div>
+                </div>
+                <h2 class="text-lg font-semibold mb-2 group-hover:text-accent transition-colors">
+                  {item.title}
+                </h2>
+                {item.desc && (
+                  <p class="text-sm text-muted line-clamp-2 leading-relaxed mb-3">{item.desc}</p>
+                )}
+                {item.tags.length > 0 && (
+                  <div class="flex flex-wrap gap-1.5">
+                    {item.tags.slice(0, 4).map((tag) => (
+                      <span class="tag-chip text-[10px]">#{tag}</span>
+                    ))}
+                  </div>
+                )}
+              </a>
+            </article>
+          ))}
+        </div>
+
+        <div class="hidden text-center py-6 font-mono text-sm" id="inv-more">
+          <button type="button" class="tag-chip" id="inv-more-btn">
+            {lang === 'en' ? 'Load more' : '加载更多'} · <span id="inv-more-count">0</span>
+          </button>
+        </div>
+
+        <div class="hidden text-center py-12 font-mono text-sm text-muted" id="inv-empty">
+          <p class="mb-2">{lang === 'en' ? 'Nothing matches this tag' : '没有符合该标签的内容'}</p>
+          <button type="button" class="text-accent hover:underline" id="inv-clear">
+            {lang === 'en' ? 'Clear filter' : '清除筛选'}
+          </button>
+        </div>
+      </>
+    )}
+  </div>
+</BaseLayout>
+
+<script is:inline>
+  const PAGE_SIZE = 20;
+  const items = Array.from(document.querySelectorAll('[data-item]'));
+  const tagBtns = Array.from(document.querySelectorAll('#tag-filter button[data-tag]'));
+  const emptyEl = document.getElementById('inv-empty');
+  const clearEl = document.getElementById('inv-clear');
+  const includeOtherEl = document.getElementById('inv-include-other');
+  const moreWrap = document.getElementById('inv-more');
+  const moreBtn = document.getElementById('inv-more-btn');
+  const moreCount = document.getElementById('inv-more-count');
+  const tagMore = document.getElementById('tag-more');
+  const overflowTags = Array.from(document.querySelectorAll('#tag-filter .tag-overflow'));
+  const base = window.location.pathname;
+
+  const params = new URLSearchParams(window.location.search);
+  const hasCurrent = items.some((el) => el.dataset.fallback !== 'true');
+  let activeTag = params.get('tag') || '';
+  let includeOther = params.get('all') === '1' || (!hasCurrent && params.get('all') !== '0');
+  let visibleLimit = PAGE_SIZE;
+  let tagsExpanded = false;
+  if (includeOtherEl) includeOtherEl.checked = includeOther;
+
+  function syncUrl() {
+    const q = new URLSearchParams();
+    if (activeTag) q.set('tag', activeTag);
+    if (includeOther) q.set('all', '1');
+    const qs = q.toString();
+    history.replaceState(null, '', qs ? `${base}?${qs}` : base);
+  }
+
+  function tagList(el) {
+    try {
+      return JSON.parse(el.dataset.tags || '[]');
+    } catch {
+      return [];
+    }
+  }
+
+  function matches(el) {
+    if (activeTag && !tagList(el).includes(activeTag)) return false;
+    if (!includeOther && el.dataset.fallback === 'true') return false;
+    return true;
+  }
+
+  function apply() {
+    const matched = items.filter(matches);
+    const shown = new Set(matched.slice(0, visibleLimit));
+    items.forEach((el) => el.classList.toggle('hidden', !shown.has(el)));
+    const remaining = matched.length - shown.size;
+    if (moreWrap) moreWrap.classList.toggle('hidden', remaining <= 0);
+    if (moreCount) moreCount.textContent = String(remaining);
+    if (emptyEl) emptyEl.classList.toggle('hidden', matched.length !== 0);
+    tagBtns.forEach((b) => b.classList.toggle('active', (b.dataset.tag || '') === activeTag));
+    syncUrl();
+  }
+
+  function resetAndApply() {
+    visibleLimit = PAGE_SIZE;
+    apply();
+  }
+
+  function setTagsExpanded(v) {
+    tagsExpanded = v;
+    overflowTags.forEach((t) => t.classList.toggle('hidden', !v));
+    if (tagMore) tagMore.textContent = v ? tagMore.dataset.less : tagMore.dataset.more;
+  }
+
+  tagBtns.forEach((b) =>
+    b.addEventListener('click', () => {
+      activeTag = b.dataset.tag || '';
+      resetAndApply();
+    })
+  );
+  includeOtherEl &&
+    includeOtherEl.addEventListener('change', () => {
+      includeOther = includeOtherEl.checked;
+      resetAndApply();
+    });
+  clearEl &&
+    clearEl.addEventListener('click', () => {
+      activeTag = '';
+      resetAndApply();
+    });
+  moreBtn &&
+    moreBtn.addEventListener('click', () => {
+      visibleLimit += PAGE_SIZE;
+      apply();
+    });
+  tagMore && tagMore.addEventListener('click', () => setTagsExpanded(!tagsExpanded));
+
+  if (activeTag && overflowTags.some((t) => t.dataset.tag === activeTag)) setTagsExpanded(true);
+
+  apply();
+</script>
